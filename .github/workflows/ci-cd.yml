@@ -1,4 +1,4 @@
-name: AMONDU CI/CD
+name: AMONDU CI
 
 on:
   push:
@@ -6,14 +6,9 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}           # Azure Container Registry 이름
-  AKS_CLUSTER: ${{ secrets.AKS_CLUSTER }}     # AKS 클러스터 이름
-  AKS_RESOURCE_GROUP: ${{ secrets.AKS_RESOURCE_GROUP }}
-
 jobs:
   # ─────────────────────────────────────────
-  # CI: 각 서비스 빌드 검증
+  # CI: Frontend
   # ─────────────────────────────────────────
   ci-frontend:
     name: CI - Frontend
@@ -25,15 +20,19 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: edtech-frontend/package-lock.json
-      - name: Install & Test
+      - name: Install
         working-directory: edtech-frontend
-        run: |
-          npm ci
-          npm test -- --watchAll=false --passWithNoTests
+        run: npm ci
+      - name: Test
+        working-directory: edtech-frontend
+        run: npm test -- --watchAll=false --passWithNoTests
       - name: Build
         working-directory: edtech-frontend
         run: CI=false npm run build
 
+  # ─────────────────────────────────────────
+  # CI: Backend (Spring Boot)
+  # ─────────────────────────────────────────
   ci-backend:
     name: CI - Backend (Spring Boot)
     runs-on: ubuntu-latest
@@ -47,12 +46,15 @@ jobs:
           java-version: "17"
           distribution: "temurin"
           cache: "gradle"
-      - name: Build & Test
+      - name: Build
         working-directory: ${{ matrix.service }}
         run: |
           chmod +x gradlew
           ./gradlew build -x test --no-daemon
 
+  # ─────────────────────────────────────────
+  # CI: Python Services
+  # ─────────────────────────────────────────
   ci-python:
     name: CI - Python Services
     runs-on: ubuntu-latest
@@ -64,100 +66,40 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - name: Install deps & Lint
+      - name: Lint
         working-directory: ${{ matrix.service }}
         run: |
           pip install flake8
-          # requirements.txt가 있는 경우 설치 (CI에서는 핵심만)
-          if [ -f requirements.txt ]; then
-            pip install fastapi uvicorn pydantic 2>/dev/null || true
-          fi
-          # 문법 오류만 체크 (E9: 런타임 에러, F63: assert 오류, F7: 문법 오류)
           flake8 app/ --select=E9,F63,F7 --show-source || true
 
   # ─────────────────────────────────────────
-  # CD: main 브랜치 push 시 → 빌드 & 배포
+  # CD: Azure AKS 배포 (TODO: Azure Secrets 등록 후 활성화)
+  # 활성화 방법: 아래 if: false 제거 후 GitHub Secrets에 등록
+  # - AZURE_CREDENTIALS, ACR_NAME, AKS_CLUSTER, AKS_RESOURCE_GROUP
   # ─────────────────────────────────────────
   cd-deploy:
-    name: CD - Build & Deploy to AKS
+    name: CD - Deploy to AKS
     runs-on: ubuntu-latest
     needs: [ci-frontend, ci-backend, ci-python]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
+    if: false
     steps:
       - uses: actions/checkout@v4
-
       - name: Azure 로그인
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: ACR 로그인
-        run: az acr login --name ${{ env.ACR_NAME }}
-
-      - name: Docker 이미지 빌드 & Push (병렬)
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+      - name: Docker 이미지 빌드 & Push
         run: |
           IMAGE_TAG=${{ github.sha }}
-          ACR=${{ env.ACR_NAME }}.azurecr.io
-
-          build_and_push() {
-            SERVICE=$1
-            CONTEXT=$2
-            echo "▶ Building $SERVICE..."
+          ACR=${{ secrets.ACR_NAME }}.azurecr.io
+          for SERVICE in edtech-frontend edtech-backend edtech-noticeboard edtech-gpt-backend attention-model-fastapi-service edtech-aiquizbackend; do
             docker build -t $ACR/$SERVICE:$IMAGE_TAG -t $ACR/$SERVICE:latest \
-              -f docker/$SERVICE/Dockerfile $CONTEXT
-            docker push $ACR/$SERVICE:$IMAGE_TAG
-            docker push $ACR/$SERVICE:latest
-            echo "✅ $SERVICE pushed"
-          }
-
-          # 병렬 빌드
-          build_and_push edtech-frontend        edtech-frontend        &
-          build_and_push edtech-backend         edtech-backend         &
-          build_and_push edtech-noticeboard     edtech-noticeboard     &
-          build_and_push edtech-gpt-backend     edtech-gpt-backend     &
-          build_and_push attention-model-fastapi-service attention-model-fastapi-service &
-          build_and_push edtech-aiquizbackend   edtech-aiquizbackend   &
+              -f docker/$SERVICE/Dockerfile $SERVICE &
+          done
           wait
-          echo "🎉 All images built and pushed"
-
-      - name: AKS 자격증명 설정
+      - name: AKS 배포
         run: |
-          az aks get-credentials \
-            --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
-            --name ${{ env.AKS_CLUSTER }} \
-            --overwrite-existing
-
-      - name: K8s 이미지 태그 업데이트 & 배포
-        run: |
-          IMAGE_TAG=${{ github.sha }}
-          ACR=${{ env.ACR_NAME }}.azurecr.io
-
-          # 각 Deployment의 이미지를 새 태그로 교체
-          kubectl set image deployment/edtech-frontend \
-            edtech-frontend=$ACR/edtech-frontend:$IMAGE_TAG -n amondu
-
-          kubectl set image deployment/edtech-backend \
-            edtech-backend=$ACR/edtech-backend:$IMAGE_TAG -n amondu
-
-          kubectl set image deployment/edtech-noticeboard \
-            edtech-noticeboard=$ACR/edtech-noticeboard:$IMAGE_TAG -n amondu
-
-          kubectl set image deployment/edtech-gpt-backend \
-            edtech-gpt-backend=$ACR/edtech-gpt-backend:$IMAGE_TAG -n amondu
-
-          kubectl set image deployment/attention-model-service \
-            attention-model-service=$ACR/attention-model-fastapi-service:$IMAGE_TAG -n amondu
-
-          kubectl set image deployment/edtech-aiquizbackend \
-            edtech-aiquizbackend=$ACR/edtech-aiquizbackend:$IMAGE_TAG -n amondu
-
-      - name: 배포 완료 대기 (Rollout 확인)
-        run: |
-          kubectl rollout status deployment/edtech-frontend -n amondu --timeout=120s
-          kubectl rollout status deployment/edtech-backend -n amondu --timeout=120s
-          kubectl rollout status deployment/edtech-noticeboard -n amondu --timeout=120s
-          kubectl rollout status deployment/edtech-gpt-backend -n amondu --timeout=120s
-          kubectl rollout status deployment/attention-model-service -n amondu --timeout=180s
-          kubectl rollout status deployment/edtech-aiquizbackend -n amondu --timeout=120s
-          echo "🚀 All deployments rolled out successfully"
+          az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER }}
+          kubectl rollout restart deployment -n amondu
