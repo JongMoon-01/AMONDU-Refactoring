@@ -1,0 +1,23 @@
+package com.edtech.edtech_backend.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Configuration
+public class WebClientConfig {
+
+    // 기본 Builder 빈(없어도 Boot가 자동 제공하지만, 명시해도 무방)
+    @Bean
+    public WebClient.Builder webClientBuilder() {
+        return WebClient.builder();
+    }
+
+    // 기본 WebClient 빈 (이걸 서비스에서 주입)
+    @Bean
+    public WebClient webClient(WebClient.Builder builder,
+                               @Value("${llm.base-url:http://127.0.0.1:8082}") String baseUrl) {
+        return builder.baseUrl(baseUrl).build();
+    }
+}

@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attention-model-service
+  namespace: amondu
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: attention-model-service
+  template:
+    metadata:
+      labels:
+        app: attention-model-service
+    spec:
+      containers:
+        - name: attention-model-service
+          image: attention-model-fastapi-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: amondu-secrets
+                  key: ATTENTION_DB_URL
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"

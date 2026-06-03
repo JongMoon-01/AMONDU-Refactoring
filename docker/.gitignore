@@ -1,0 +1,29 @@
+# 절대 커밋하면 안 되는 파일들
+k8s/secrets-template.yaml
+**/.env
+**/.env.*
+!**/.env.example
+
+# AI 모델 가중치 (용량 큼)
+**/*.pt
+**/*.pth
+**/*.h5
+**/*.onnx
+**/*.pkl
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+
+# Java / Gradle
+**/build/
+**/.gradle/
+
+# Node
+**/node_modules/
+**/build/
+
+# ChromaDB 로컬 데이터
+**/chroma_db_data/

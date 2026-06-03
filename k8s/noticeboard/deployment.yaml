@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edtech-noticeboard
+  namespace: amondu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edtech-noticeboard
+  template:
+    metadata:
+      labels:
+        app: edtech-noticeboard
+    spec:
+      containers:
+        - name: edtech-noticeboard
+          image: edtech-noticeboard:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8083
+          env:
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: amondu-secrets
+                  key: DB_URL
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: amondu-secrets
+                  key: DB_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: amondu-secrets
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"

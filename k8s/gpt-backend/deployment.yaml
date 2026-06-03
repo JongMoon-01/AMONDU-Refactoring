@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edtech-gpt-backend
+  namespace: amondu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edtech-gpt-backend
+  template:
+    metadata:
+      labels:
+        app: edtech-gpt-backend
+    spec:
+      containers:
+        - name: edtech-gpt-backend
+          image: edtech-gpt-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8081
+          env:
+            - name: GPT_MODEL
+              value: "gpt-4o"
+            - name: GPT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: amondu-secrets
+                  key: OPENAI_API_KEY
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: focus_analysis_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: focus123
+      MYSQL_DATABASE: focus_analysis
+      MYSQL_USER: focus_user
+      MYSQL_PASSWORD: focus123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:
+    driver: local

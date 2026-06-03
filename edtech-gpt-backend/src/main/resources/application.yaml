@@ -1,0 +1,21 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: edtech-chat-server
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+# (선택) GPT API 설정
+gpt:
+  api-key: sk
+  temperature: 0.7
+  max-tokens: 1024
+
+# CORS 허용 (프론트에서 직접 호출 시 필요)
+cors:
+  allowed-origins: "http://localhost:3000"
