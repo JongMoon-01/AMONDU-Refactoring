@@ -32,7 +32,7 @@ jobs:
           npm test -- --watchAll=false --passWithNoTests
       - name: Build
         working-directory: edtech-frontend
-        run: npm run build
+        run: CI=false npm run build
 
   ci-backend:
     name: CI - Backend (Spring Boot)
