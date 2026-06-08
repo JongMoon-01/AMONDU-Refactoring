@@ -1,4 +1,3 @@
-// src/main/java/com/edtech/edtech_backend/dto/LlmQuizDto.java
 package com.edtech.edtech_backend.dto;
 
 import lombok.Data;
@@ -14,6 +13,13 @@ public class LlmQuizDto {
         private double avgScore;
     }
 
+    // ③ 퀴즈 생성 요청 시 프론트에서 intervals 직접 전달
+    // (attentionArr을 DB에서 읽지 않으므로 클라이언트가 보유한 intervals 사용)
+    @Data
+    public static class GenerateRequest {
+        private List<IntervalDto> intervals;
+    }
+
     @Data
     public static class LlmQuizRequest {
         private Long classId;
@@ -26,7 +32,7 @@ public class LlmQuizDto {
 
     @Data
     public static class OptionDto {
-        private String label; // A/B/C/D or O/X
+        private String label;
         private String text;
     }
 
@@ -34,7 +40,7 @@ public class LlmQuizDto {
     public static class QuizItemDto {
         private String question;
         private List<OptionDto> options;
-        private String answer; // 정답 라벨
-        private String type;   // "MCQ" | "OX" (선택)
+        private String answer;
+        private String type;
     }
 }

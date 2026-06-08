@@ -10,7 +10,6 @@ import java.util.Optional;
 public interface CourseEngagementAnalyticsRepository
         extends JpaRepository<CourseEngagementAnalytics, Long> {
 
-    // createdAt DESC로 최신 1건 — 파생 메서드 대신 @Query + default로 안전하게
     @Query("""
       select a from CourseEngagementAnalytics a
       where a.classEntity.classId = :classId
@@ -20,19 +19,19 @@ public interface CourseEngagementAnalyticsRepository
     """)
     List<CourseEngagementAnalytics> findSessions(Long classId, Long courseId, String userId);
 
-    default Optional<CourseEngagementAnalytics> findLatest(Long classId, Long courseId, String userId) {
+    default Optional<CourseEngagementAnalytics> findLatest(
+            Long classId, Long courseId, String userId) {
         List<CourseEngagementAnalytics> list = findSessions(classId, courseId, userId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
 
+    // attentionArr size 체크 → focusDropCount > 0 으로 교체
     @Query("""
       select (count(a) > 0) from CourseEngagementAnalytics a
       where a.classEntity.classId = :classId
         and a.courseId = :courseId
         and a.userId = :userId
-        and size(a.attentionArr) > 0
+        and a.focusDropCount > 0
     """)
-    boolean existsByClassIdAndCourseIdAndUserIdAndAttentionArrNotEmpty(
-            Long classId, Long courseId, String userId
-    );
+    boolean existsWithFocusDrop(Long classId, Long courseId, String userId);
 }

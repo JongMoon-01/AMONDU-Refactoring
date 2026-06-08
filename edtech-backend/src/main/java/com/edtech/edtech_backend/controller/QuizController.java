@@ -11,20 +11,23 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/quizzes") // ✅ 클래스 레벨
+@RequestMapping("/api/quizzes")
 @RequiredArgsConstructor
 public class QuizController {
 
     private final QuizLlmGatewayService quizLlmGatewayService;
 
-    @PostMapping("/classes/{classId}/courses/{courseId}/generate") // ✅ 메서드 레벨
+    // ③ 프론트에서 intervals 직접 전달 (attentionArr DB 조회 제거)
+    @PostMapping("/classes/{classId}/courses/{courseId}/generate")
     public ResponseEntity<List<LlmQuizDto.QuizItemDto>> generate(
             @PathVariable Long classId,
             @PathVariable Long courseId,
-            Authentication auth
+            Authentication auth,
+            @RequestBody LlmQuizDto.GenerateRequest body
     ) {
         String userId = resolveUserId(auth);
-        var items = quizLlmGatewayService.generateFromIntervals(classId, courseId, userId);
+        var items = quizLlmGatewayService.generateFromIntervals(
+                classId, courseId, userId, body.getIntervals());
         return ResponseEntity.ok(items);
     }
 
