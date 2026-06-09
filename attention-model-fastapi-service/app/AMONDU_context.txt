@@ -1,0 +1,122 @@
+====================================================
+AMONDU 리팩터링 프로젝트 컨텍스트 (새 채팅용)
+====================================================
+GitHub: https://github.com/JongMoon-01/AMONDU-Refactoring
+
+
+## 완료된 작업 (건드리지 말 것)
+- CI 파이프라인 (GitHub Actions)
+  - Frontend: npm install → 테스트 → 빌드
+  - Spring Boot 3개: Gradle 빌드
+  - Python 2개: flake8 문법 검사
+  - main push / PR 시 자동 실행, 실패 시 빨간불
+- K8s 매니페스트 작성
+- minikube 로컬 배포 전체 서비스 기동
+- README 업데이트
+
+
+## 서비스 구성 (MSA)
+- edtech-backend (Spring Boot) → edtech DB (MariaDB)
+- noticeboard (Spring Boot) → noticeboard DB (MariaDB)
+- aiquizbackend (Spring Boot) → aiquiz DB (MySQL)
+- attention-model-fastapi-service (Python/FastAPI) → focus_analysis DB (MySQL)
+
+
+## 현재 진행 중인 작업: ERD 최적화 리팩터링
+
+### 발견된 문제 3가지
+
+[문제 1] User 테이블 중복
+- edtech.User: userId Long (PK), email, name, passwordHash, phone
+- attention.User: id Integer (PK), username, email, is_active — edtech User와 완전히 별개, 동기화 없음
+
+→ 해결 방향: attention.User 테이블 삭제
+  - Session.user_id, Score.user_id, UserStats.user_id 타입을 Long으로 변경
+  - JWT에서 edtech userId 추출해서 직접 사용
+  - /api/score/users/ 엔드포인트 전체 제거
+  - 이 작업이 마지막 대화에서 진행 중이었음 (코드 리팩터링 단계에서 토큰 소진)
+
+[문제 2] Summary 테이블 중복
+- edtech.Summary: summaryId Long, lecture_id FK, content TEXT
+- aiquiz.Summary: summary_id BigInt, lecture_id (참조만), content TEXT — 같은 데이터 중복, 정합성 위험
+
+→ 해결 방향: aiquiz.Summary 삭제
+  - aiquiz는 edtech.Summary.summaryId만 참조
+  - REST 조회 또는 Kafka 이벤트로 수신
+
+[문제 3] CourseEngagementAnalytics.attentionArr JSON 배열
+- 현재: 집중도 구간 데이터를 JSON 배열로 통째로 저장 → 조회 비효율, 실시간 처리 불가
+
+→ 해결 방향: Kafka 연동 후
+  - attentionArr 컬럼 제거
+  - avgFocusScore: Float, focusDropCount: Int 집계 컬럼으로 교체
+
+
+## 전체 ERD 테이블 목록
+
+### edtech DB (MariaDB)
+- User: userId(Long PK), email(unique), name, passwordHash, phone
+- ClassEntity: classId(Long PK), title, tag, headcount
+- Enrollment: id(Long PK), user_id FK→User, class_id FK→ClassEntity, createdAt
+- Course: courseId(Long PK), title, materialUrl, tag, instructor, lecture_id FK→Lecture, class_id FK→ClassEntity
+- Lecture: lectureId(Long PK), title, mpdPath, vttPath
+- Summary: summaryId(Long PK), lecture_id FK→Lecture, content TEXT, createdAt
+- CourseEngagementAnalytics: courseAnalyticsId(Long PK), class_id FK→ClassEntity, courseId, userId(String), startedAt/endedAt(Instant), totalDurationSec, attentionArr(JSON[]) ← 문제 컬럼, createdAt
+
+### noticeboard DB (MariaDB)
+- NoticePost: id(Long PK), title, content TEXT, createdAt/updatedAt
+- QnaPost: id(Long PK), title, content TEXT, authorId(String), createdAt/updatedAt
+- QnaComment: id(Long PK), qna_post_id FK→QnaPost, content TEXT
+
+### focus_analysis DB (MySQL) — attention-model-fastapi-service
+- User: id(Integer PK), username, email, is_active, created_at ← 삭제 예정
+- Session: id(Integer PK), user_id FK→User, session_name, start_time/end_time, duration_minutes, total_frames, is_active
+- Score: id(Integer PK), user_id FK→User, session_id FK→Session, emotion_score/gaze_score/final_score(Float), timestamp
+- FrameData: id(Integer PK), session_id FK→Session, frame_id, emotion/gaze data
+
+### aiquiz DB (MySQL)
+- (Summary 있음 — 삭제 예정)
+- AIQuiz 등 (quiz 관련 테이블)
+
+
+## 최적화 설계안 요약 (TO-BE)
+
+attention.User 제거:
+  Session.user_id: Long (JWT에서 추출한 edtech userId)
+  Score.user_id: Long (동일)
+  UserStats.user_id: Long (동일)
+
+aiquiz.Summary 제거:
+  aiquiz.AIQuiz.summary_id: Long (edtech.Summary 참조만)
+  user_id: Long (JWT에서 추출)
+
+CourseEngagementAnalytics 변경:
+  attentionArr(JSON[]) 제거
+  avgFocusScore: Float 추가
+  focusDropCount: Int 추가
+
+attention API 정리:
+  현재: /gaze, /analyze/gaze/frames, /analyze/gaze/image, /analyze/gaze/advanced 4개 중복
+  목표: /analyze 1개로 통합
+
+
+## 다음 단계 계획 (순서대로)
+1. ① attention.User 제거 리팩터링 ← 지금 여기서 토큰 소진됨. 코드 변경 직전까지 진행됨
+   - 대상 파일: attention-model-fastapi-service 내 User 관련 모델/라우터/서비스
+   - 변경: Session/Score/UserStats의 user_id 타입 → Long, JWT 파싱으로 대체
+   - 제거: /api/score/users/ 엔드포인트 전체
+2. ② aiquiz.Summary 제거 리팩터링
+3. ③ attentionArr → avgFocusScore/focusDropCount 교체
+4. ④ attention API 통합 (/analyze 1개로)
+5. ⑤ Kafka 설계 및 구현 (attention.score.measured, quiz.generated, enrollment.created 토픽)
+6. ⑥ 모니터링 대시보드 (Grafana + Prometheus)
+
+
+## 적용 예정 패턴
+- Database per Service (현재 구조 유지)
+- CQRS: CourseEngagementAnalytics (집계 쿼리 분리)
+- Saga (Choreography): 수강신청 → attention 세션 생성 → Kafka 이벤트 전파
+- Outbox Pattern: attention → backend 데이터 전송 시 메시지 유실 방지
+
+
+====================================================

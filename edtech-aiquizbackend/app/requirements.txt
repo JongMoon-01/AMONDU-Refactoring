@@ -1,0 +1,18 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-multipart==0.0.20
+python-dotenv==1.1.1
+pydantic-settings==2.10.1
+
+# DB
+sqlalchemy==2.0.42
+pymysql==1.1.1
+
+# AI / RAG
+openai==1.98.0
+chromadb==1.0.15
+rank-bm25==0.2.2
+numpy==1.26.4
+
+# Kafka
+kafka-python==2.0.2

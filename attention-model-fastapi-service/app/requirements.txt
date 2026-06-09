@@ -17,3 +17,7 @@ onnxruntime==1.18.0
 # 시선 추정 (L2CS-Net 의존)
 dlib==19.24.4
 PyJWT==2.8.0
+
+# 모니터링
+aiokafka==0.11.0
+prometheus-fastapi-instrumentator==7.0.0
